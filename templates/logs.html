@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Logs{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Logs</h1>
+    <p class="text-muted-2">Registro dos Excel gerados e dos envios para o gerente.</p>
+  </div>
+</div>
+<div class="card-box">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0 tabela" style="min-width: 760px">
+      <thead>
+        <tr>
+          <th>Ação executada</th>
+          <th>Gerente</th>
+          <th class="text-end">Valor orçado da folha</th>
+          <th class="text-end">Percentual estabelecido</th>
+          <th>Data e hora</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in registros %}
+        <tr>
+          <td>{{ l.acao }}</td>
+          <td>{{ l.gerente }}</td>
+          <td class="text-end">{{ l.orcamento|brl }}</td>
+          <td class="text-end">{{ l.percentual|pct }}</td>
+          <td>{{ l.data_hora|datahora }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted-2 py-4">Nenhuma ação registrada ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
