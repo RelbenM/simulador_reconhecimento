@@ -1,11 +1,10 @@
-/* Página do setor: edição, cálculo (via backend), pendências em tempo real, salvar, enviar e Excel. */
+/* Página do setor (gestor): preenchimento dos colaboradores, pendências, salvar, enviar para aprovação e Excel. */
 (() => {
   const form = document.getElementById("formSetor");
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
   const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
-  const orc = $("#orcamento"), pct = $("#percentual"), disp = $("#disponivel");
   const btnSalvar = $("#btnSalvar"), btnEnviar = $("#btnEnviar"), btnExcel = $("#btnExcel");
-  const msgParam = $("#msgParametros"), pendInfo = $("#pendInfo");
+  const pendInfo = $("#pendInfo");
 
   let dirty = false, ocupado = false, pendente = false;
   App.guardNavigation(() => dirty);
@@ -25,61 +24,31 @@
       el.classList.toggle("is-pending", vazio);
       if (vazio) n++;
     });
-    [orc, pct].forEach((el) => { if (el.value.trim() === "") n++; });
     pendente = n > 0;
     pendInfo.innerHTML = pendente
-      ? `<i class="bi bi-exclamation-triangle text-warning me-1"></i>${n} campo(s) pendente(s). Preencha todos para poder enviar ao gerente ou gerar o Excel.`
+      ? `<i class="bi bi-exclamation-triangle text-warning me-1"></i>${n} campo(s) pendente(s). Preencha todos para poder enviar para aprovação ou gerar o Excel.`
       : `<i class="bi bi-check-circle text-success me-1"></i>Todos os campos preenchidos.`;
     atualizarBotoes();
   }
 
   /* ---------- erros de validação ---------- */
-  function limparErros() {
-    $$(".is-invalid", form).forEach((el) => el.classList.remove("is-invalid"));
-    msgParam.textContent = "";
-  }
+  function limparErros() { $$(".is-invalid", form).forEach((el) => el.classList.remove("is-invalid")); }
   function marcarErros(lista) {
     let primeiro = null;
-    lista.forEach(({ campo, mensagem }) => {
+    lista.forEach(({ campo }) => {
       const el = $(`[data-key="${campo}"]`, form);
       if (!el) return;
       el.classList.add("is-invalid");
       primeiro = primeiro || el;
-      if (campo === "orcamento" || campo === "percentual")
-        msgParam.textContent = (msgParam.textContent ? msgParam.textContent + " " : "") + mensagem;
     });
     return primeiro;
   }
 
-  /* ---------- formatação ao sair do campo ---------- */
-  orc.addEventListener("blur", () => App.formatarCampo(orc, "moeda"));
-  pct.addEventListener("blur", () => App.formatarCampo(pct, "pct"));
   $$('[data-field="salario"]', form).forEach((el) => el.addEventListener("blur", () => App.formatarCampo(el, "moeda")));
-
-  /* ---------- valor disponível (cálculo feito no backend) ---------- */
-  let timer = null, seq = 0;
-  async function recalcular() {
-    const meu = ++seq;
-    try {
-      const r = await fetch(form.dataset.urlCalcular, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orcamento: orc.value, percentual: pct.value }),
-      });
-      const j = await r.json();
-      if (meu !== seq) return;
-      orc.classList.toggle("is-invalid", !!(j.erros && j.erros.orcamento));
-      pct.classList.toggle("is-invalid", !!(j.erros && j.erros.percentual));
-      msgParam.textContent = j.erros ? Object.values(j.erros).join(" ") : "";
-      if (j.ok) disp.textContent = j.disponivel;
-    } catch (_) { /* mantém o último valor exibido */ }
-  }
-  [orc, pct].forEach((el) => el.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(recalcular, 250); }));
 
   /* ---------- coleta e envio ---------- */
   function coletar() {
     return {
-      orcamento: orc.value,
-      percentual: pct.value,
       colaboradores: $$("tbody tr[data-colab-id]", form).map((tr) => {
         const o = { id: Number(tr.dataset.colabId) };
         $$("[data-field]", tr).forEach((el) => (o[el.dataset.field] = el.value));
@@ -91,6 +60,7 @@
     const b = $("#statusBadge");
     b.className = `status-badge status-${j.status}`;
     b.textContent = j.status_label;
+    App.atualizarTimeline(j.timeline);
   }
 
   // Retorna true quando o servidor aceitou os dados.
@@ -108,10 +78,9 @@
       }
       dirty = false;
       atualizarStatus(j);
-      disp.textContent = j.disponivel;
       if (!silencioso) {
         App.showAlert(j.pendencias.length ? "warning" : "success", j.mensagem);
-        App.showToast(ehEnvio ? "Envio registrado em Logs." : `Orçamento atualizado: disponível ${j.disponivel}`);
+        App.showToast(ehEnvio ? "Envio registrado em Logs." : "Alterações salvas.");
       }
       return true;
     } catch (_) {
@@ -125,7 +94,7 @@
   btnSalvar.addEventListener("click", () => enviarDados(form.dataset.urlSalvar, false));
   btnEnviar.addEventListener("click", () => {
     if (pendente) return;
-    if (confirm("Validar e salvar os dados e enviar para o gerente? (Nenhum e-mail é enviado nesta versão; o envio fica registrado em Logs.)"))
+    if (confirm("Salvar os dados e enviar para aprovação da diretoria? (Simulação: nenhum e-mail é enviado; o envio fica registrado em Logs.)"))
       enviarDados(form.dataset.urlEnviar, true);
   });
 

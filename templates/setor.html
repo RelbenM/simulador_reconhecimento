@@ -16,9 +16,9 @@
   </div>
   <div class="d-flex flex-wrap align-items-center gap-2">
     <span id="statusBadge" class="status-badge status-{{ setor.status }}">{{ setor.status_label }}</span>
-    <button class="btn btn-outline-success" id="btnExcel" type="button"><i class="bi bi-file-earmark-excel me-1"></i>Gerar Excel</button>
-    <button class="btn btn-outline-success" id="btnSalvar" type="button"><i class="bi bi-save me-1"></i>Salvar alterações</button>
-    <button class="btn btn-sicredi" id="btnEnviar" type="button"><i class="bi bi-send me-1"></i>Enviar para o gerente</button>
+    <button class="btn btn-outline-success btn-icon-only" id="btnExcel" type="button" title="Gerar Excel" aria-label="Gerar Excel"><i class="bi bi-file-earmark-excel"></i></button>
+    <button class="btn btn-outline-success btn-icon-only" id="btnSalvar" type="button" title="Salvar alterações" aria-label="Salvar alterações"><i class="bi bi-save"></i></button>
+    <button class="btn btn-sicredi" id="btnEnviar" type="button"><i class="bi bi-send me-1"></i>Enviar para aprovação</button>
   </div>
 </div>
 <div class="small text-muted-2 mb-3" id="pendInfo"></div>
@@ -27,7 +27,6 @@
       data-setor-id="{{ setor.id }}"
       data-url-salvar="{{ url_for('api_salvar', setor_id=setor.id) }}"
       data-url-enviar="{{ url_for('api_enviar', setor_id=setor.id) }}"
-      data-url-calcular="{{ url_for('api_calcular') }}"
       data-url-excel="{{ url_for('excel', setor_id=setor.id) }}">
 
   <div class="card-box info-card mb-4">
@@ -41,28 +40,19 @@
         <div class="info-label">Colaboradores</div>
         <div class="fw-semibold fs-5">{{ setor.qtd_colaboradores }}</div>
       </div>
-      <div class="col-6 col-md-4 col-xl-2">
-        <label class="info-label" for="orcamento">Orçamento de folha</label>
-        <div class="input-group campo-orcamento">
-          <span class="input-group-text">R$</span>
-          <input type="text" inputmode="decimal" class="form-control text-end" id="orcamento"
-                 data-key="orcamento" value="{{ setor.orcamento|num_br }}">
-        </div>
+      <div class="col-6 col-md-3 col-xl-2">
+        <div class="info-label">Orçamento de folha</div>
+        <div class="fw-semibold fs-5">{{ setor.orcamento|brl }}</div>
       </div>
       <div class="col-6 col-md-3 col-xl-2">
-        <label class="info-label" for="percentual">Percentual de reconhecimento</label>
-        <div class="input-group">
-          <input type="text" inputmode="decimal" class="form-control text-end" id="percentual"
-                 data-key="percentual" value="{{ setor.percentual|pct_num }}">
-          <span class="input-group-text">%</span>
-        </div>
+        <div class="info-label">Percentual de reconhecimento</div>
+        <div class="fw-semibold fs-5">{{ setor.percentual|pct }}</div>
       </div>
       <div class="col-6 col-md-5 col-xl-3">
         <div class="info-label">Valor disponível para reconhecimento</div>
         <div class="available" id="disponivel">{{ setor.disponivel|brl }}</div>
       </div>
     </div>
-    <div class="invalid-msg" id="msgParametros"></div>
   </div>
 
   <h2 class="section-title">Colaboradores do setor</h2>

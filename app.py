@@ -1,4 +1,4 @@
-"""Simulador de Reconhecimento — Gestão de Pessoas (GP).
+"""Simulador de Reconhecimento — Gestão de Pessoas.
 
 Execução: python app.py
 """
@@ -10,8 +10,10 @@ import threading
 from datetime import datetime
 import unicodedata
 import webbrowser
+from functools import wraps
 
-from flask import Flask, abort, jsonify, render_template, request, send_file
+from flask import (Flask, abort, jsonify, redirect, render_template, request, send_file,
+                   session, url_for)
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -19,7 +21,13 @@ from openpyxl.utils import get_column_letter
 import database as db
 
 app = Flask(__name__)
+app.secret_key = "simulador-reconhecimento-local"  # só para guardar o perfil simulado na sessão
 OUTPUT_DIR = os.path.join(db.BASE_DIR, "output")
+
+# Perfis simulados (sem autenticação): cada um enxerga apenas as suas páginas.
+PERFIS = {"gpc": "GPC — Usuário Administrador", "gestor": "Gestor — Simulação",
+          "diretoria": "Diretoria — Simulação"}
+NOME_PERFIL = {"gpc": "GPC", "gestor": "Gestor", "diretoria": "Diretoria"}
 
 CAMPOS_COLAB = ["maturidade", "conduta", "zona", "elegivel"]
 TAM_MAX_TEXTO = 100
@@ -73,8 +81,39 @@ app.jinja_env.filters.update(brl=brl, num_br=num_br, pct=pct, pct_num=pct_num, t
 @app.context_processor
 def contexto_global():
     ativo = request.view_args.get("setor_id") if request.endpoint == "setor" else None
+    perfil = perfil_atual()
     return {"setores_menu": db.listar_setores_menu(), "setor_ativo_id": ativo,
-            "STATUS": db.STATUS, "CICLO": db.CICLO}
+            "STATUS": db.STATUS, "CICLO": db.CICLO,
+            "perfil": perfil, "PERFIS": PERFIS, "perfil_label": PERFIS[perfil]}
+
+
+# --------------------------------------------------------------------- perfis
+def perfil_atual():
+    p = session.get("perfil", "gpc")
+    return p if p in PERFIS else "gpc"
+
+
+def pagina_inicial(perfil):
+    if perfil == "gestor":
+        return url_for("setor", setor_id=db.listar_setores_menu()[0]["id"])
+    return url_for({"gpc": "orcamentos", "diretoria": "aprovacao"}[perfil])
+
+
+def exige(perfil_necessario):
+    """Restringe a rota a um único perfil (páginas HTML: 403 amigável; API/Excel: JSON 403)."""
+    def deco(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if perfil_atual() != perfil_necessario:
+                nome = NOME_PERFIL[perfil_necessario]
+                if request.path.startswith("/api/") or request.endpoint == "excel":
+                    return jsonify(ok=False, erros=[],
+                                   mensagem=f"Acesso restrito ao perfil {nome}."), 403
+                return render_template("acesso_negado.html", exigido=nome,
+                                       inicio=pagina_inicial(perfil_atual())), 403
+            return f(*args, **kwargs)
+        return wrapper
+    return deco
 
 
 # ------------------------------------------------------------------ validação
@@ -116,30 +155,10 @@ def parse_orcamento(valor):
     return round(n, 2)
 
 
-def parse_percentual(valor):
-    n = _num_ou_erro(valor)
-    if n is None:
-        raise ValueError("Informe o percentual de reconhecimento.")
-    if n < 0 or n > 100:
-        raise ValueError("O percentual deve estar entre 0% e 100%.")
-    return round(n / 100, 4)
-
-
 def validar(setor_id, dados):
-    """Retorna (limpo, erros, pendencias). Erros impedem salvar; pendências não."""
+    """Valida os dados dos colaboradores. Retorna (limpo, erros, pendencias)."""
     erros, pendencias = [], []
-    limpo = {"orcamento": None, "percentual": None, "colaboradores": []}
-
-    try:
-        limpo["orcamento"] = parse_orcamento(dados.get("orcamento"))
-    except ValueError as e:
-        msg = str(e) if str(e) else "Orçamento inválido."
-        erros.append({"campo": "orcamento", "mensagem": msg})
-    try:
-        limpo["percentual"] = parse_percentual(dados.get("percentual"))
-    except ValueError as e:
-        msg = str(e) if str(e) else "Percentual inválido."
-        erros.append({"campo": "percentual", "mensagem": msg})
+    limpo = {"colaboradores": []}
 
     enviados = {}
     for item in dados.get("colaboradores") or []:
@@ -192,47 +211,68 @@ def definir_status(limpo, pendencias, enviar=False):
     return "em_preenchimento" if pendencias else "pronto_envio"
 
 
-def resposta_dados(setor_id, limpo, status, mensagem, pendencias=None):
+PASSOS_TIMELINE = [("GPC", "Lançamento de folha"), ("Gestor", "Preenchimento dos dados"),
+                   ("Diretoria", "Aprovação")]
+
+
+def linha_do_tempo(etapa):
+    """Etapas anteriores concluídas, a etapa informada em andamento e as seguintes pendentes."""
+    atual = {"gpc": 0, "gestor": 1, "diretoria": 2}[etapa]
+    return [{"nome": n, "descricao": d,
+             "estado": "done" if i < atual else ("current" if i == atual else "pending")}
+            for i, (n, d) in enumerate(PASSOS_TIMELINE)]
+
+
+def etapa_do_setor(setor):
+    """Na página do gestor a etapa é Gestor; depois de enviado para aprovação, passa à Diretoria."""
+    return "diretoria" if setor["status"] == "enviado" else "gestor"
+
+
+def resposta_dados(setor_id, status, mensagem, pendencias=None):
+    s = db.obter_setor(setor_id)
     return {
         "ok": True, "mensagem": mensagem, "status": status, "status_label": db.STATUS[status],
-        "orcamento": brl(limpo["orcamento"]), "percentual": pct(limpo["percentual"]),
-        "disponivel": brl(round(limpo["orcamento"] * limpo["percentual"], 2)),
-        "pendencias": pendencias or [],
+        "disponivel": brl(s["disponivel"]), "pendencias": pendencias or [],
+        "timeline": linha_do_tempo(etapa_do_setor(s)),
     }
 
 
 # ---------------------------------------------------------------------- rotas
 @app.route("/")
 def home():
-    return render_template("home.html", setores=db.listar_setores(), totais=db.totais())
+    return redirect(pagina_inicial(perfil_atual()))
+
+
+@app.route("/perfil/<chave>")
+def trocar_perfil(chave):
+    if chave not in PERFIS:
+        abort(404)
+    session["perfil"] = chave
+    return redirect(pagina_inicial(chave))
+
+
+@app.route("/orcamentos")
+@exige("gpc")
+def orcamentos():
+    return render_template("home.html", setores=db.listar_setores(), totais=db.totais(),
+                           timeline=linha_do_tempo("gpc"))
 
 
 @app.route("/setores/<int:setor_id>")
+@exige("gestor")
 def setor(setor_id):
     s = db.obter_setor(setor_id)
     if not s:
         abort(404)
     return render_template("setor.html", setor=s, colaboradores=db.listar_colaboradores(setor_id),
-                           opcoes=db.OPCOES)
+                           opcoes=db.OPCOES, timeline=linha_do_tempo(etapa_do_setor(s)))
 
 
-@app.post("/api/calcular")
-def api_calcular():
-    """Cálculo definitivo do valor disponível (a tela apenas exibe o resultado)."""
-    dados = request.get_json(silent=True) or {}
-    erros = {}
-    orc = pc = None
-    try:
-        orc = parse_orcamento(dados.get("orcamento"))
-    except ValueError as e:
-        erros["orcamento"] = str(e) or "Orçamento inválido."
-    try:
-        pc = parse_percentual(dados.get("percentual"))
-    except ValueError as e:
-        erros["percentual"] = str(e) or "Percentual inválido."
-    if erros:
-        return jsonify(ok=False, erros=erros), 422
-    return jsonify(ok=True, disponivel=brl(round(orc * pc, 2)))
+@app.route("/aprovacao")
+@exige("diretoria")
+def aprovacao():
+    return render_template("aprovacao.html", setores=db.listar_setores(),
+                           timeline=linha_do_tempo("diretoria"))
 
 
 def _processar(setor_id, enviar):
@@ -245,26 +285,28 @@ def _processar(setor_id, enviar):
                        erros=erros), 422
     if enviar and pendencias:
         return jsonify(ok=False, mensagem="Existem campos obrigatórios pendentes. "
-                       "Preencha-os para enviar.", erros=pendencias), 422
+                       "Preencha-os para enviar para aprovação.", erros=pendencias), 422
     status = definir_status(limpo, pendencias, enviar)
-    db.salvar_setor(setor_id, limpo["orcamento"], limpo["percentual"], limpo["colaboradores"], status)
+    db.salvar_setor(setor_id, limpo["colaboradores"], status)
+    s = db.obter_setor(setor_id)
     if enviar:
-        db.registrar_log("Envio ao gerente", db.obter_setor(setor_id)["gerente"],
-                         limpo["orcamento"], limpo["percentual"])
-        msg = "Dados validados e salvos. Setor marcado como enviado (sem envio real de e-mail)."
+        db.registrar_log("Envio para aprovação", s["gerente"], s["orcamento"], s["percentual"])
+        msg = "Dados salvos e enviados para aprovação da diretoria (simulação, sem envio real de e-mail)."
     elif pendencias:
         msg = "Alterações salvas. Ainda há campos pendentes."
     else:
         msg = "Alterações salvas com sucesso. Setor pronto para envio."
-    return jsonify(resposta_dados(setor_id, limpo, status, msg, pendencias))
+    return jsonify(resposta_dados(setor_id, status, msg, pendencias))
 
 
 @app.post("/api/setores/<int:setor_id>/salvar")
+@exige("gestor")
 def api_salvar(setor_id):
     return _processar(setor_id, enviar=False)
 
 
 @app.post("/api/setores/<int:setor_id>/enviar")
+@exige("gestor")
 def api_enviar(setor_id):
     return _processar(setor_id, enviar=True)
 
@@ -275,11 +317,12 @@ def _slug(texto):
 
 
 @app.route("/setores/<int:setor_id>/excel")
+@exige("gestor")
 def excel(setor_id):
     s = db.obter_setor(setor_id)
     if not s:
         abort(404)
-    _, erros, pendencias = validar(setor_id, {"orcamento": s["orcamento"], "percentual": s["percentual"]})
+    _, erros, pendencias = validar(setor_id, {})
     if erros or pendencias:
         return jsonify(ok=False, mensagem="Não é possível gerar o Excel: há campos pendentes de resposta.",
                        erros=erros + pendencias), 422
@@ -342,8 +385,9 @@ def excel(setor_id):
 
 
 @app.post("/api/home/parametros")
+@exige("gpc")
 def api_home_parametros():
-    """Homepage: pré-visualiza (salvar=false) ou grava (salvar=true) folha e percentual dos setores."""
+    """Homepage: pré-visualiza (salvar=false) ou grava (salvar=true) o orçamento de folha dos setores."""
     dados = request.get_json(silent=True) or {}
     salvar = bool(dados.get("salvar"))
     enviados = {}
@@ -355,28 +399,22 @@ def api_home_parametros():
     erros, linhas = [], []
     for s in db.listar_setores():
         it = enviados.get(s["id"], {})
-        orc, pc = s["orcamento"], s["percentual"]
+        orc = s["orcamento"]
         if "orcamento" in it:
             try:
                 orc = parse_orcamento(it["orcamento"])
             except ValueError as e:
                 erros.append({"campo": f"orcamento-{s['id']}", "mensagem": f"{s['nome']}: {e}"})
                 orc = s["orcamento"]
-        if "percentual" in it:
-            try:
-                pc = parse_percentual(it["percentual"])
-            except ValueError as e:
-                erros.append({"campo": f"percentual-{s['id']}", "mensagem": f"{s['nome']}: {e}"})
-                pc = s["percentual"]
-        linhas.append({"id": s["id"], "orcamento": orc, "percentual": pc,
-                       "disponivel": round(orc * pc, 2), "qtd": s["qtd_colaboradores"]})
+        linhas.append({"id": s["id"], "orcamento": orc, "status": s["status"],
+                       "disponivel": round(orc * s["percentual"], 2), "qtd": s["qtd_colaboradores"]})
     if salvar and erros:
         return jsonify(ok=False, mensagem="Corrija os campos destacados. Nada foi perdido.", erros=erros), 422
     if salvar:
         db.salvar_parametros(linhas)
     return jsonify(
         ok=True, erros=erros,
-        mensagem="Orçamento e percentuais salvos com sucesso." if salvar else "",
+        mensagem="Orçamentos de folha salvos com sucesso." if salvar else "",
         linhas={str(l["id"]): brl(l["disponivel"]) for l in linhas},
         totais={"colaboradores": sum(l["qtd"] for l in linhas),
                 "folha": brl(round(sum(l["orcamento"] for l in linhas), 2)),

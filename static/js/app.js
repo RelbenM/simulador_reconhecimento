@@ -51,7 +51,24 @@ const App = (() => {
     sidebar.classList.toggle("open", open);
     backdrop.classList.toggle("show", open);
   };
-  document.getElementById("btnMenu")?.addEventListener("click", () => toggle(!sidebar.classList.contains("open")));
+  const desktop = window.matchMedia("(min-width: 992px)");
+  const raiz = document.documentElement;
+  const recolher = (valor) => {
+    raiz.classList.toggle("sidebar-collapsed", valor);
+    try { localStorage.setItem("sidebarRecolhida", valor ? "1" : "0"); } catch (_) {}
+  };
+  // Desktop: expande/recolhe (só ícones). Celular/tablet: abre/fecha o menu sobre a página.
+  document.getElementById("btnMenu")?.addEventListener("click", () => {
+    if (desktop.matches) recolher(!raiz.classList.contains("sidebar-collapsed"));
+    else toggle(!sidebar.classList.contains("open"));
+  });
+  // Menu recolhido: clicar no ícone de Setores expande o menu para mostrar a lista.
+  document.addEventListener("click", (e) => {
+    if (desktop.matches && raiz.classList.contains("sidebar-collapsed") && e.target.closest(".side-toggle")) {
+      e.stopPropagation();
+      recolher(false);
+    }
+  }, true);
   backdrop?.addEventListener("click", () => toggle(false));
 
   // Formata o campo ao sair dele; marca inválido se for texto ou negativo.
@@ -78,5 +95,14 @@ const App = (() => {
     });
   }
 
-  return { parseNum, formatMoeda, formatPct, formatarCampo, guardNavigation, showAlert, showToast, esc };
+  // Atualiza a linha do tempo com os estados devolvidos pelo servidor.
+  function atualizarTimeline(passos) {
+    (passos || []).forEach((p, i) => {
+      const el = document.querySelector(`.tl-step[data-idx="${i}"]`);
+      if (!el) return;
+      el.className = `tl-step tl-${p.estado}`;
+    });
+  }
+
+  return { parseNum, formatMoeda, formatPct, formatarCampo, guardNavigation, showAlert, showToast, esc, atualizarTimeline };
 })();

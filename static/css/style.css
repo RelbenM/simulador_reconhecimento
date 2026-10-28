@@ -22,6 +22,9 @@ body { background: var(--fundo); color: var(--texto); font-family: "Segoe UI", s
 .brand-icon { font-size: 1.9rem; }
 .brand-title { font-weight: 700; font-size: 1.1rem; }
 .brand-sub { opacity: .85; }
+.user-btn { color: #fff; border: 0; background: transparent; font-weight: 500; }
+.user-btn:hover, .user-btn:focus, .user-btn.show { color: #fff; background: rgba(255,255,255,.14); }
+.dropdown-menu .dropdown-item.active { background: var(--verde); }
 .btn-icon { color: #fff; font-size: 1.6rem; padding: 0 .25rem; border: 0; background: transparent; }
 
 /* Barra lateral */
@@ -107,5 +110,34 @@ body { background: var(--fundo); color: var(--texto); font-family: "Segoe UI", s
   .cycle-select { min-width: 0; width: 100%; }
 }
 
-/* Campo "Orçamento de folha" na página do setor: 45% da largura da coluna (mínimo para caber o valor) */
-.campo-orcamento { width: 45%; min-width: 150px; }
+/* Linha do tempo de acompanhamento (direto na página, sem container) */
+.tl { list-style: none; padding: 0; display: flex; max-width: 640px; margin: 0 auto 2.25rem; }
+.tl-step { flex: 1; position: relative; text-align: center; }
+.tl-step:not(:last-child)::after { content: ""; position: absolute; top: 26.5px; left: calc(50% + 34px); right: calc(-50% + 34px);
+  height: 3px; background: #D5DEE3; border-radius: 2px; }
+.tl-step.tl-done:not(:last-child)::after { background: var(--verde); }
+.tl-circle { width: 56px; height: 56px; margin: 0 auto .5rem; border-radius: 50%; display: grid; place-items: center;
+  font-weight: 700; font-size: .56rem; border: 3px solid #D5DEE3; background: #EEF2F4; color: var(--texto-2); transition: .2s; }
+.tl-done .tl-circle { background: var(--verde); border-color: var(--verde); color: #fff; }
+.tl-current .tl-circle { background: var(--verde-escuro); border-color: var(--verde-escuro); color: #fff; box-shadow: 0 0 0 4px rgba(245,196,81,.6); }
+.tl-desc { font-size: .8rem; font-weight: 600; }
+@media (max-width: 575.98px) {
+  .tl-circle { width: 46px; height: 46px; font-size: .48rem; border-width: 2px; }
+  .tl-step:not(:last-child)::after { top: 21.5px; left: calc(50% + 28px); right: calc(-50% + 28px); }
+  .tl-desc { font-size: .72rem; }
+}
+
+/* Botões somente com ícone */
+.btn-icon-only { width: 42px; height: 38px; padding: 0; display: inline-grid; place-items: center; }
+.btn-icon-only i { font-size: 1.1rem; }
+
+/* Menu lateral recolhido (desktop): apenas ícones */
+@media (min-width: 992px) {
+  .app-sidebar, .app-main { transition: width .2s ease, margin-left .2s ease; }
+  html.sidebar-collapsed .app-sidebar { width: 72px; padding-inline: .5rem; }
+  html.sidebar-collapsed .app-main { margin-left: 72px; }
+  html.sidebar-collapsed .side-link { justify-content: center; padding-inline: 0; }
+  html.sidebar-collapsed .side-link span,
+  html.sidebar-collapsed .side-link .chevron,
+  html.sidebar-collapsed #menuSetores { display: none !important; }
+}

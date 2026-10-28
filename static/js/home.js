@@ -1,4 +1,4 @@
-/* Homepage: orçamento da folha e percentual editáveis por setor; totais calculados no backend. */
+/* Homepage: orçamento de folha editável por setor; totais calculados no backend. */
 (() => {
   const form = document.getElementById("formHome");
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
@@ -9,7 +9,6 @@
   App.guardNavigation(() => dirty);
 
   $$('[data-key^="orcamento-"]', form).forEach((el) => el.addEventListener("blur", () => App.formatarCampo(el, "moeda")));
-  $$('[data-key^="percentual-"]', form).forEach((el) => el.addEventListener("blur", () => App.formatarCampo(el, "pct")));
 
   function coletar(salvar) {
     return {
@@ -17,7 +16,6 @@
       setores: $$("tr[data-setor-id]", form).map((tr) => ({
         id: Number(tr.dataset.setorId),
         orcamento: $('[data-key^="orcamento-"]', tr).value,
-        percentual: $('[data-key^="percentual-"]', tr).value,
       })),
     };
   }

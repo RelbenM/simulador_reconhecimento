@@ -1,0 +1,8 @@
+<ol class="tl" aria-label="Acompanhamento do ciclo">
+  {% for p in timeline %}
+  <li class="tl-step tl-{{ p.estado }}" data-idx="{{ loop.index0 }}">
+    <div class="tl-circle">{{ p.nome }}</div>
+    <div class="tl-desc">{{ p.descricao }}</div>
+  </li>
+  {% endfor %}
+</ol>

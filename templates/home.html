@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Início{% endblock %}
+{% block title %}Orçamentos de folha{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Olá, GP!</h1>
-    <p class="text-muted-2">Gerencie os setores e prepare as informações do ciclo de reconhecimento.</p>
+    <h1>Orçamentos de folha</h1>
+    <p class="text-muted-2">Defina o orçamento de folha de cada setor do ciclo de reconhecimento.</p>
   </div>
   <div>
     <select class="form-select cycle-select" aria-label="Ciclo de reconhecimento">
@@ -41,7 +41,7 @@
 <form id="formHome" novalidate autocomplete="off" data-url="{{ url_for('api_home_parametros') }}">
 <div class="card-box">
   <div class="table-responsive">
-    <table class="table align-middle mb-0 tabela" style="min-width: 960px">
+    <table class="table align-middle mb-0 tabela" style="min-width: 860px">
       <thead>
         <tr>
           <th>Setor</th>
@@ -50,7 +50,6 @@
           <th class="text-end">Percentual de reconhecimento</th>
           <th class="text-end">Valor disponível</th>
           <th>Status</th>
-          <th class="text-center">Ação</th>
         </tr>
       </thead>
       <tbody>
@@ -65,20 +64,9 @@
                      value="{{ s.orcamento|num_br }}" aria-label="Valor orçado da folha de {{ s.nome }}">
             </div>
           </td>
-          <td style="min-width:120px">
-            <div class="input-group input-group-sm">
-              <input type="text" inputmode="decimal" class="form-control text-end" data-key="percentual-{{ s.id }}"
-                     value="{{ s.percentual|pct_num }}" aria-label="Percentual de {{ s.nome }}">
-              <span class="input-group-text">%</span>
-            </div>
-          </td>
+          <td class="text-end">{{ s.percentual|pct }}</td>
           <td class="text-end fw-semibold" id="disp-{{ s.id }}">{{ s.disponivel|brl }}</td>
           <td><span class="status-badge status-{{ s.status }}">{{ s.status_label }}</span></td>
-          <td class="text-center">
-            <a class="btn-arrow" href="{{ url_for('setor', setor_id=s.id) }}" aria-label="Abrir {{ s.nome }}">
-              <i class="bi bi-arrow-right"></i>
-            </a>
-          </td>
         </tr>
         {% endfor %}
       </tbody>

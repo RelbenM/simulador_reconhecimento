@@ -14,11 +14,14 @@ DB_PATH = os.path.join(DATA_DIR, "simulador.db")
 
 CICLO = "2026"
 
+# Percentual de reconhecimento: fixo em 5% para todos os setores (somente informação textual).
+PERCENTUAL_FIXO = 0.05
+
 STATUS = {
     "nao_iniciado": "Não iniciado",
     "em_preenchimento": "Em preenchimento",
     "pronto_envio": "Pronto para envio",
-    "enviado": "Enviado",
+    "enviado": "Enviado para aprovação",
 }
 
 # Única lista fechada: Elegível. Maturidade, conduta e zona salarial são campos de
@@ -95,13 +98,15 @@ def init_db():
     """Cria o esquema e carrega os dados fictícios apenas se o banco estiver vazio."""
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        # Percentual é fixo: também corrige bancos criados em versões anteriores.
+        conn.execute("UPDATE setores SET percentual = ?", (PERCENTUAL_FIXO,))
         if conn.execute("SELECT COUNT(*) FROM setores").fetchone()[0] > 0:
             return
         for sid, nome, gerente, email, orc, pct, qtd, status, preenchido in SETORES_SEED:
             conn.execute(
                 "INSERT INTO setores (id, nome, gerente, email, orcamento, percentual, status) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (sid, nome, gerente, email, orc, pct, status),
+                (sid, nome, gerente, email, orc, PERCENTUAL_FIXO, status),
             )
             rng = random.Random(sid * 97)
             nomes = set()
@@ -173,13 +178,10 @@ def totais():
     }
 
 
-def salvar_setor(setor_id, orcamento, percentual, colaboradores, status):
-    """Grava parâmetros do setor e dados dos colaboradores em uma única transação."""
+def salvar_setor(setor_id, colaboradores, status):
+    """Grava os dados dos colaboradores e o status do setor em uma única transação."""
     with get_conn() as conn:
-        conn.execute(
-            "UPDATE setores SET orcamento = ?, percentual = ?, status = ? WHERE id = ?",
-            (orcamento, percentual, status, setor_id),
-        )
+        conn.execute("UPDATE setores SET status = ? WHERE id = ?", (status, setor_id))
         for c in colaboradores:
             conn.execute(
                 "UPDATE colaboradores SET maturidade = ?, conduta = ?, salario = ?, zona = ?, "
@@ -189,11 +191,10 @@ def salvar_setor(setor_id, orcamento, percentual, colaboradores, status):
 
 
 def salvar_parametros(linhas):
-    """Grava orçamento e percentual de vários setores (Homepage) em uma transação."""
+    """Grava o orçamento de folha de vários setores (Homepage) em uma transação."""
     with get_conn() as conn:
         for l in linhas:
-            conn.execute("UPDATE setores SET orcamento = ?, percentual = ? WHERE id = ?",
-                         (l["orcamento"], l["percentual"], l["id"]))
+            conn.execute("UPDATE setores SET orcamento = ? WHERE id = ?", (l["orcamento"], l["id"]))
 
 
 def registrar_log(acao, gerente, orcamento, percentual):

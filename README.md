@@ -30,18 +30,17 @@ data/             simulador.db (criado automaticamente)
 output/           cópias dos Excel gerados
 ```
 
-## Regras implementadas
+## Fluxo e regras implementadas
 
-- **Homepage**: valor orçado da folha e percentual de reconhecimento são campos editáveis em cada setor. O valor disponível e os cards (total orçado da folha e total disponível) são recalculados no backend enquanto se digita e gravados em `Salvar alterações`.
-- **Valor disponível = orçamento da folha × percentual** (percentual guardado como fração, ex.: `0.50`, e exibido como `50%`).
-- **Página do setor**: maturidade, conduta e zona salarial são **texto livre** (até 100 caracteres) até que as listas sejam definidas. Só "Elegível" tem opções (Sim/Não). Nome e tempo de cargo são automáticos.
-- **Pendências**: campos vazios ficam em amarelo em tempo real. Enquanto houver pendência, os botões `Enviar para o gerente` e `Gerar Excel` ficam desativados; o backend também recusa as duas ações.
-- **Salvar** aceita rascunho com campos vazios; erros de formato (negativos, percentual fora de 0–100, texto muito longo, elegível inválido) bloqueiam e não apagam o que foi digitado.
-- **Status**: *Não iniciado* → *Em preenchimento* → *Pronto para envio* → *Enviado*.
-- **Enviar para o gerente**: valida, salva, marca como *Enviado* e registra em Logs. **Não envia e-mail.**
-- **Excel**: um arquivo por setor, com os dados salvos (se houver alterações não salvas, elas são salvas antes). Cada geração é registrada em Logs; uma cópia fica em `output/`.
-- **Logs** (menu lateral): ação executada, gerente, valor orçado da folha, percentual e data/hora, do mais recente para o mais antigo.
-- Aviso ao sair da Homepage ou do setor com alterações não salvas.
+- **Linha do tempo** (topo da Homepage e da página do setor): três etapas em bolinhas — **GPC** (lançamento de folha), **Gestor** (preenchimento dos dados) e **Diretoria** (aprovação). GPC fica concluída quando todos os setores têm orçamento de folha lançado; Gestor, quando todos foram enviados para aprovação; a Diretoria fica em andamento a partir daí. Na página do setor a linha do tempo mostra só aquele setor.
+- **Homepage (GP)**: usada apenas para definir o **orçamento de folha** de cada setor. Os cards (colaboradores, total orçado e total disponível) são recalculados no backend enquanto se digita e gravados em `Salvar alterações`.
+- **Percentual de reconhecimento fixo em 5%** (`PERCENTUAL_FIXO` em `database.py`), exibido apenas como texto. **Valor disponível = orçamento de folha × 5%.**
+- **Página do setor (gestor)**: orçamento, percentual e valor disponível são somente leitura. O gestor preenche os dados dos colaboradores (maturidade, conduta e zona salarial em texto livre; salário; elegível Sim/Não) e usa `Enviar para aprovação` ao finalizar.
+- **Pendências**: campos vazios ficam em amarelo em tempo real; enquanto houver pendência, `Enviar para aprovação` e `Gerar Excel` ficam desativados (o backend também recusa).
+- **Enviar para aprovação**: salva, marca o setor como *Enviado para aprovação* e avança a linha do tempo para a Diretoria. É uma simulação: **nenhum e-mail é enviado**. Nenhuma validação nova de gestor (como limite de distribuição) foi implementada.
+- **Excel** (`/setores/<id>/excel`): um arquivo por setor, com os dados salvos. Cada geração é registrada em Logs; cópia em `output/`.
+- **Logs** (menu lateral): ação executada, gerente, valor orçado da folha, percentual e data/hora.
+- Aviso ao sair da página com alterações não salvas.
 
 ## Fora do escopo desta versão
 
